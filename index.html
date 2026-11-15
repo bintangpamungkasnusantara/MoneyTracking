@@ -53,12 +53,15 @@ const def=()=>({books:[{id:'b1',name:'Cash',g:'cash'},{id:'b2',name:'Dana',g:'di
 cats:[...['Orang tua','Beasiswa','Gaji','Freelance'].map(n=>({id:uid(),n,t:'in'})),{id:'c_paid',n:'Hutang lunas',t:'in',s:2},
 {id:uid(),n:'Makan',t:'out'},{id:'c_debt',n:'Hutang',t:'out',s:1},{id:uid(),n:'Internet',t:'out'}],tx:[]});
 let D;try{D=JSON.parse(localStorage.getItem(K))||def()}catch(e){D=def()}
+[{id:'c_tin',n:'Transfer masuk',t:'in',s:3},{id:'c_tout',n:'Transfer keluar',t:'out',s:3},{id:'c_adm',n:'Biaya admin',t:'out',s:4}].forEach(c=>{if(!D.cats.some(x=>x.id===c.id))D.cats.push(c)});
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){toast('Gagal menyimpan data!')}};
 const S={tab:'home',f:'all',p:'all'};let F={};
 const rp=n=>(n<0?'-':'')+'Rp'+Math.abs(n).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const bk=id=>D.books.find(b=>b.id===id),ct=id=>D.cats.find(c=>c.id===id);
 const sg=t=>t.type==='in'?t.amt:-t.amt,today=()=>new Date().toLocaleDateString('sv'),sum=l=>l.reduce((s,t)=>s+t.amt,0);
+const isTr=t=>ct(t.cat)?.s===3,needW=c=>c&&(c.s===1||c.s===2);let mode='tx',T={};
+const defBook=()=>{let l;try{l=localStorage.getItem(K+'_lb')}catch(e){}return bk(l)?l:D.books[0]?.id};
 let tt;const toast=m=>{const e=$('#t');e.textContent=m;e.hidden=false;clearTimeout(tt);tt=setTimeout(()=>e.hidden=true,2200)};
 const dlg=h=>new Promise(r=>{const d=$('#d');d.innerHTML=`<div class="dbox">${h}</div>`;d.hidden=false;const i=$('#di');if(i)setTimeout(()=>i.focus(),50);
  d.onclick=e=>{const x=e.target.closest('[data-r]');if(!x)return;const v=x.dataset.r==='1'?(i?i.value:true):null;d.hidden=true;d.innerHTML='';r(v)}});
@@ -73,15 +76,15 @@ const latest=l=>l.slice().reverse().sort((a,b)=>b.date.localeCompare(a.date));
 function filt(){const c=(v,l)=>`<button class="chip${S.f===v?' on':''}" data-f="${v}">${l}</button>`;
  return `<div class="chips">${c('all','Semua')}${Object.keys(G).filter(g=>D.books.filter(b=>b.g===g).length>1).map(g=>c('g:'+g,'📁 '+G[g])).join('')}${D.books.map(b=>c('b:'+b.id,esc(b.name))).join('')}</div>`}
 const seg=()=>`<div class="seg"><button class="${S.p==='all'?'on':''}" data-p="all">Semua waktu</button><button class="${S.p==='month'?'on':''}" data-p="month">Bulan ini</button></div>`;
-function rows(l){return l.length?l.map(t=>`<div class="item" data-a="edit" data-id="${t.id}"><div><b>${esc(ct(t.cat)?.n||t.cn)}${t.who?' – '+esc(t.who):''}</b>${t.note?`<small>${esc(t.note)}</small>`:''}<small>${esc(bk(t.book).name)} · ${t.date}</small></div><b class="${t.type}">${t.type==='in'?'+':'-'}${rp(t.amt)}</b></div>`).join(''):'<p class="mu">Belum ada transaksi. Tekan tombol <b>+</b> di bawah untuk mulai mencatat.</p>'}
+function rows(l){return l.length?l.map(t=>`<div class="item" data-a="edit" data-id="${t.id}"><div><b>${t.tr&&t.k!=='fee'?'🔁 ':''}${esc(ct(t.cat)?.n||t.cn)}${t.who?' – '+esc(t.who):''}</b>${t.note?`<small>${esc(t.note)}</small>`:''}<small>${esc(bk(t.book).name)} · ${t.date}</small></div><b class="${t.type}">${t.type==='in'?'+':'-'}${rp(t.amt)}</b></div>`).join(''):'<p class="mu">Belum ada transaksi. Tekan tombol <b>+</b> di bawah untuk mulai mencatat.</p>'}
 function bals(){const bal=id=>D.tx.filter(t=>t.book===id).reduce((s,t)=>s+sg(t),0);let h='';
  for(const g in G){const bs=D.books.filter(b=>b.g===g);h+=`<div class="gh"><b>${G[g]}</b><b>${rp(bs.reduce((s,b)=>s+bal(b.id),0))}</b></div>`+bs.map(b=>`<div class="bk"><span>${esc(b.name)}</span><span>${rp(bal(b.id))}</span></div>`).join('')}
  return `<div class="card"><b>Saldo per buku</b>${h}</div>`}
-function bars(l,type,title,col){const m={};l.filter(t=>t.type===type).forEach(t=>{const n=ct(t.cat)?.n||t.cn||'?';m[n]=(m[n]||0)+t.amt});
+function bars(l,type,title,col){const m={};l.filter(t=>t.type===type&&!isTr(t)).forEach(t=>{const n=ct(t.cat)?.n||t.cn||'?';m[n]=(m[n]||0)+t.amt});
  const e=Object.entries(m).sort((a,b)=>b[1]-a[1]),mx=e[0]?.[1]||1,tot=e.reduce((s,x)=>s+x[1],0),pc=v=>(v/tot*100).toLocaleString('id-ID',{maximumFractionDigits:1})+'%';
  return `<div class="card"><div class="gh"><b>${title}</b><b style="color:var(${col})">${rp(tot)}</b></div>`+(e.length?e.map(([n,v])=>`<div class="bl"><span>${esc(n)}</span><em>${rp(v)} · ${pc(v)}</em></div><div class="tr"><i style="width:${v/mx*100}%;background:var(${col})"></i></div>`).join(''):'<p class="mu">Belum ada data</p>')+'</div>'}
 function home(){const p=fx(),lab=S.f==='all'?'Semua buku':S.f[0]==='g'?G[S.f.slice(2)]:bk(S.f.slice(2))?.name||'';
- return filt()+`<div class="hero"><small>Saldo · ${esc(lab)}</small><div class="big">${rp(fx(false).reduce((s,t)=>s+sg(t),0))}</div><div class="row"><span>⬇ ${rp(sum(p.filter(t=>t.type==='in')))}</span><span>⬆ ${rp(sum(p.filter(t=>t.type==='out')))}</span></div></div>`+seg()
+ return filt()+`<div class="hero"><small>Saldo · ${esc(lab)}</small><div class="big">${rp(fx(false).reduce((s,t)=>s+sg(t),0))}</div><div class="row"><span>⬇ ${rp(sum(p.filter(t=>t.type==='in'&&!isTr(t))))}</span><span>⬆ ${rp(sum(p.filter(t=>t.type==='out'&&!isTr(t))))}</span></div></div>`+seg()
  +`<div class="card"><div class="gh"><b>Terbaru</b><button class="s" data-t="hist">Lihat semua</button></div>${rows(latest(p).slice(0,5))}</div>`
  +bars(p,'in','Grafik Income','--in')+bars(p,'out','Grafik Outcome','--out')+(S.f==='all'?bals():'')}
 const hist=()=>filt()+seg()+`<div class="card">${rows(latest(fx()))}</div>`;
@@ -92,40 +95,73 @@ function manage(){let h='<div class="card"><b>Buku catatan</b>';
  for(const g in G)h+=`<div class="gh"><span>${G[g]}</span><button class="s" data-a="addbook" data-g="${g}">+ Tambah</button></div>`+D.books.filter(b=>b.g===g).map(b=>`<div class="bk"><span>${esc(b.name)}</span><span><button class="s" data-a="editbook" data-id="${b.id}">Ubah</button> <button class="s d" data-a="delbook" data-id="${b.id}">Hapus</button></span></div>`).join('');
  h+='</div>';
  for(const t of['in','out'])h+=`<div class="card"><div class="gh"><b>Kategori ${t==='in'?'Income':'Outcome'}</b><button class="s" data-a="addcat" data-t="${t}">+ Tambah</button></div>`+D.cats.filter(c=>c.t===t).map(c=>`<div class="bk"><span>${esc(c.n)}${c.s?' 🔒':''}</span><span><button class="s" data-a="editcat" data-id="${c.id}">Ubah</button>${c.s?'':` <button class="s d" data-a="delcat" data-id="${c.id}">Hapus</button>`}</span></div>`).join('')+'</div>';
- return h+`<div class="card"><b>Cadangan data</b><p class="mu">Data hanya tersimpan di HP ini. Cadangkan berkala.</p><div class="btns"><button class="b" data-a="exp">⬇ Simpan file</button><button class="b" data-a="cpy">📋 Salin</button></div><div class="btns"><button class="b" data-a="imp">📂 Impor file</button><button class="b" data-a="pst">📥 Tempel</button></div><input type="file" id="fi" accept=".json" hidden></div><p class="mu" style="text-align:center">🔒 = kategori khusus (terhubung ke menu Hutang)</p>`}
+ return h+`<div class="card"><b>Cadangan data</b><p class="mu">Data hanya tersimpan di HP ini. Cadangkan berkala.</p><div class="btns"><button class="b" data-a="exp">⬇ Simpan file</button><button class="b" data-a="cpy">📋 Salin</button></div><div class="btns"><button class="b" data-a="imp">📂 Impor file</button><button class="b" data-a="pst">📥 Tempel</button></div><input type="file" id="fi" accept=".json" hidden></div><p class="mu" style="text-align:center">🔒 = kategori khusus (terhubung ke menu Hutang &amp; Transfer)</p>`}
 function render(){$('#app').innerHTML=S.tab==='home'?home():S.tab==='hist'?hist():S.tab==='debt'?debt():manage();
  document.querySelectorAll('nav [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===S.tab))}
 
 function openForm(t={}){if(!D.books.length)return info('Tambah buku dulu di tab Kelola.');let lb;try{lb=localStorage.getItem(K+'_lb')}catch(e){}
- F={id:t.id||'',type:t.type||'out',book:t.book||(bk(lb)?lb:D.books[0].id),cat:t.cat||'',who:t.who||'',amt:t.amt||'',date:t.date||today(),note:t.note||''};
- if(ct(F.cat)?.t!==F.type)F.cat=D.cats.find(c=>c.t===F.type)?.id||'';drawForm(!F.id);$('#m').hidden=false}
+ mode='tx';F={id:t.id||'',type:t.type||'out',book:t.book||(bk(lb)?lb:D.books[0].id),cat:t.cat||'',who:t.who||'',amt:t.amt||'',date:t.date||today(),note:t.note||''};
+ if(ct(F.cat)?.t!==F.type)F.cat=D.cats.find(c=>c.t===F.type&&c.s!==3)?.id||'';drawForm(!F.id);$('#m').hidden=false}
 function readF(){if(!$('#fa'))return;F.amt=+$('#fa').value.replace(/\D/g,'')||'';F.date=$('#fd').value;F.note=$('#fk').value;if($('#fw'))F.who=$('#fw').value}
 function drawForm(focus){const c=ct(F.cat),ch=(a,v,l,on)=>`<button class="chip${on?' on':''}" data-${a}="${v}">${l}</button>`;
  const names=c?.s===2?debts().map(o=>o.n):[...new Set(D.tx.filter(t=>t.who).map(t=>t.who.trim()))];
- $('#m').innerHTML=`<div class="sheet"><div class="seg"><button class="${F.type==='in'?'on in':''}" data-ty="in">⬇ Pemasukan</button><button class="${F.type==='out'?'on out':''}" data-ty="out">⬆ Pengeluaran</button></div>
+ $('#m').innerHTML=`<div class="sheet">${segH(F.type,!F.id)}
  <label>Jumlah</label><div class="amt"><span>Rp</span><input id="fa" inputmode="numeric" placeholder="0" value="${F.amt?F.amt.toLocaleString('id-ID'):''}"></div>
  <div class="chips">${[5000,10000,50000,100000].map(v=>`<button class="chip" data-q="${v}">+${v/1000}rb</button>`).join('')}<button class="chip" data-q="0">Reset</button></div>
  <label>Buku</label><div class="chips" style="flex-wrap:wrap">${D.books.map(b=>ch('fb',b.id,esc(b.name),b.id===F.book)).join('')}</div>
- <label>Kategori</label><div class="chips" style="flex-wrap:wrap">${D.cats.filter(x=>x.t===F.type).map(x=>ch('fc',x.id,esc(x.n),x.id===F.cat)).join('')}</div>
- ${c?.s?`<label>${c.s===2?'Nama yang melunasi':'Dipinjamkan ke (nama)'}</label><input id="fw" list="dl" autocomplete="off" value="${esc(F.who)}"><datalist id="dl">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`:''}
+ <label>Kategori</label><div class="chips" style="flex-wrap:wrap">${D.cats.filter(x=>x.t===F.type&&x.s!==3).map(x=>ch('fc',x.id,esc(x.n),x.id===F.cat)).join('')}</div>
+ ${needW(c)?`<label>${c.s===2?'Nama yang melunasi':'Dipinjamkan ke (nama)'}</label><input id="fw" list="dl" autocomplete="off" value="${esc(F.who)}"><datalist id="dl">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`:''}
  <label>Tanggal</label><input id="fd" type="date" value="${F.date}"><label>Keterangan</label><input id="fk" placeholder="opsional" value="${esc(F.note)}">
  <div class="btns">${F.id?'<button class="b del" data-a="deltx">Hapus</button>':''}<button class="b" data-a="close">Batal</button><button class="b p" data-a="savetx">Simpan</button></div></div>`;
  if(focus)setTimeout(()=>$('#fa')?.focus(),60)}
 const close=()=>{$('#m').hidden=true;$('#m').innerHTML=''};
-function savetx(){readF();const c=ct(F.cat);if(!c)return toast('Pilih kategori');if(!(F.amt>0))return toast('Isi jumlah dulu');if(c.s&&!F.who.trim())return toast('Isi nama');
- const o={id:F.id||uid(),book:F.book,type:F.type,cat:c.id,cn:c.n,amt:F.amt,who:c.s?F.who.trim():'',date:F.date||today(),note:F.note.trim()};
+function savetx(){readF();const c=ct(F.cat);if(!c)return toast('Pilih kategori');if(!(F.amt>0))return toast('Isi jumlah dulu');if(needW(c)&&!F.who.trim())return toast('Isi nama');
+ const o={id:F.id||uid(),book:F.book,type:F.type,cat:c.id,cn:c.n,amt:F.amt,who:needW(c)?F.who.trim():'',date:F.date||today(),note:F.note.trim()};
  if(F.id)D.tx[D.tx.findIndex(t=>t.id===F.id)]=o;else D.tx.push(o);
  try{localStorage.setItem(K+'_lb',o.book)}catch(e){}save();close();render();toast('Tersimpan ✔')}
+
+const segH=(k,tr=true)=>`<div class="seg" style="grid-template-columns:repeat(${tr?3:2},1fr)"><button class="${k==='in'?'on in':''}" data-ty="in">⬇ Masuk</button><button class="${k==='out'?'on out':''}" data-ty="out">⬆ Keluar</button>${tr?`<button class="${k==='tr'?'on':''}" data-ty="tr">🔁 Transfer</button>`:''}</div>`;
+const T0=()=>{const f=defBook();return{id:'',from:f,to:D.books.find(b=>b.id!==f)?.id||'',amt:'',fee:'',feeBy:'to',date:today(),nt:''}};
+function readT(){if(!$('#fa'))return;T.amt=+$('#fa').value.replace(/\D/g,'')||'';T.fee=+$('#fe').value.replace(/\D/g,'')||'';T.date=$('#fd').value;T.nt=$('#fk').value}
+function updTs(){const e=$('#ts');if(!e)return;const a=+$('#fa').value.replace(/\D/g,'')||0,f=+$('#fe').value.replace(/\D/g,'')||0;
+ e.innerHTML=`${esc(bk(T.from)?.name||'?')} <b class="out">-${rp(a+(T.feeBy==='from'?f:0))}</b><br>${esc(bk(T.to)?.name||'?')} <b class="in">+${rp(a-(T.feeBy==='to'?f:0))}</b>`+(f?`<br><small>Admin ${rp(f)} dicatat terpisah sebagai pengeluaran</small>`:'')}
+function drawTr(){const ch=(a,v,l,on)=>`<button class="chip${on?' on':''}" data-${a}="${v}">${l}</button>`,bs=(a,sel)=>D.books.map(b=>ch(a,b.id,esc(b.name),b.id===sel)).join('');
+ $('#m').innerHTML=`<div class="sheet">${segH('tr',!T.id)}
+ <label>Dari buku</label><div class="chips" style="flex-wrap:wrap">${bs('tf',T.from)}</div>
+ <label>Ke buku</label><div class="chips" style="flex-wrap:wrap">${bs('tt',T.to)}</div>
+ <label>Jumlah ditransfer</label><div class="amt"><span>Rp</span><input id="fa" inputmode="numeric" placeholder="0" value="${T.amt?T.amt.toLocaleString('id-ID'):''}"></div>
+ <div class="chips">${[10000,50000,100000,500000].map(v=>`<button class="chip" data-tq="${v}">+${v/1000}rb</button>`).join('')}</div>
+ <label>Biaya admin (opsional)</label><div class="amt"><span>Rp</span><input id="fe" inputmode="numeric" placeholder="0" style="font-size:20px" value="${T.fee?T.fee.toLocaleString('id-ID'):''}"></div>
+ <div class="chips">${[1000,2500,6500].map(v=>`<button class="chip" data-te="${v}">${v.toLocaleString('id-ID')}</button>`).join('')}<button class="chip" data-te="0">Tanpa admin</button></div>
+ <label>Admin dicatat di</label><div class="chips">${ch('fy','to','Buku tujuan',T.feeBy==='to')}${ch('fy','from','Buku asal',T.feeBy==='from')}</div>
+ <div class="card" id="ts" style="margin:10px 0"></div>
+ <label>Tanggal</label><input id="fd" type="date" value="${T.date}"><label>Keterangan</label><input id="fk" placeholder="opsional" value="${esc(T.nt)}">
+ <div class="btns">${T.id?'<button class="b del" data-a="deltr">Hapus</button>':''}<button class="b" data-a="close">Batal</button><button class="b p" data-a="savetr">Simpan</button></div></div>`;updTs()}
+function openTr(id){mode='tr';if(id){const g=D.tx.filter(t=>t.tr===id),m=g.find(t=>t.k==='main'),i=g.find(t=>t.k==='in'),f=g.find(t=>t.k==='fee');
+ T={id,from:m.book,to:i.book,amt:m.amt,fee:f?.amt||'',feeBy:f&&f.book===i.book?'to':'from',date:m.date,nt:m.nt||''}}else T=T0();drawTr();$('#m').hidden=false}
+function switchTy(ty){let o;if(mode==='tr'){readT();o={amt:T.amt,date:T.date,note:T.nt}}else{readF();o={amt:F.amt,date:F.date,note:F.note}}
+ if(ty==='tr'){mode='tr';T={...T0(),amt:o.amt,date:o.date,nt:o.note};drawTr()}
+ else{mode='tx';F={id:'',type:ty,book:defBook(),cat:D.cats.find(c=>c.t===ty&&c.s!==3)?.id||'',who:'',...o};drawForm()}}
+function saveTr(){readT();if(!bk(T.to)||T.from===T.to)return toast('Pilih buku asal & tujuan yang berbeda');if(!(T.amt>0))return toast('Isi jumlah dulu');
+ const id=T.id||uid(),fb=bk(T.from),tb=bk(T.to),b={date:T.date||today(),tr:id,who:''},n=x=>x+(T.nt?' · '+T.nt:'');
+ D.tx=D.tx.filter(t=>t.tr!==id);
+ D.tx.push({...b,id:uid(),k:'main',book:T.from,type:'out',cat:'c_tout',cn:'Transfer keluar',amt:T.amt,note:n('→ '+tb.name),nt:T.nt},
+  {...b,id:uid(),k:'in',book:T.to,type:'in',cat:'c_tin',cn:'Transfer masuk',amt:T.amt,note:n('← '+fb.name)});
+ if(T.fee>0)D.tx.push({...b,id:uid(),k:'fee',book:T.feeBy==='to'?T.to:T.from,type:'out',cat:'c_adm',cn:'Biaya admin',amt:T.fee,note:'Admin '+fb.name+' → '+tb.name});
+ try{localStorage.setItem(K+'_lb',T.from)}catch(e){}save();close();render();toast('Transfer tersimpan ✔')}
 const json=()=>JSON.stringify(D);
 function restore(txt){try{const x=JSON.parse(txt);if(!Array.isArray(x.books)||!Array.isArray(x.cats)||!Array.isArray(x.tx))throw 0;
  yes('Ganti semua data saat ini dengan data cadangan?').then(v=>{if(v){D=x;save();S.f='all';render();toast('Data dipulihkan ✔')}})}catch(_){info('Data cadangan tidak valid.')}}
 
-document.addEventListener('click',async e=>{const g=e.target.closest('[data-t],[data-f],[data-p],[data-ty],[data-fb],[data-fc],[data-q],[data-a]');if(!g)return;const d=g.dataset,a=d.a;
+document.addEventListener('click',async e=>{const g=e.target.closest('[data-t],[data-f],[data-p],[data-ty],[data-fb],[data-fc],[data-q],[data-tf],[data-tt],[data-fy],[data-tq],[data-te],[data-a]');if(!g)return;const d=g.dataset,a=d.a;
  if(d.t&&!a){S.tab=d.t;scrollTo(0,0);return render()}if(d.f){S.f=d.f;return render()}if(d.p){S.p=d.p;return render()}
- if(d.ty||d.fb||d.fc||d.q!==undefined){readF();if(d.ty){F.type=d.ty;F.cat=D.cats.find(c=>c.t===F.type)?.id||''}if(d.fb)F.book=d.fb;if(d.fc)F.cat=d.fc;
+ if(d.ty&&(d.ty==='tr'||mode==='tr'))return switchTy(d.ty);
+ if(d.tf||d.tt||d.fy||d.tq||d.te){readT();if(d.tf)T.from=d.tf;if(d.tt)T.to=d.tt;if(d.fy)T.feeBy=d.fy;if(d.tq)T.amt=(+T.amt||0)+ +d.tq;if(d.te)T.fee=+d.te||'';return drawTr()}
+ if(d.ty||d.fb||d.fc||d.q!==undefined){readF();if(d.ty){F.type=d.ty;F.cat=D.cats.find(c=>c.t===F.type&&c.s!==3)?.id||''}if(d.fb)F.book=d.fb;if(d.fc)F.cat=d.fc;
   if(d.q!==undefined)F.amt=d.q==='0'?'':(+F.amt||0)+ +d.q;return drawForm()}
- if(a==='add')openForm();else if(a==='close')close();else if(a==='savetx')savetx();
- else if(a==='edit')openForm(D.tx.find(t=>t.id===d.id));
+ if(a==='add')openForm();else if(a==='close')close();else if(a==='savetx')savetx();else if(a==='savetr')saveTr();
+ else if(a==='deltr'){if(await yes('Hapus transfer ini beserta biaya adminnya?')){D.tx=D.tx.filter(t=>t.tr!==T.id);save();close();render()}}
+ else if(a==='edit'){const t=D.tx.find(t=>t.id===d.id),g=t.tr?D.tx.filter(x=>x.tr===t.tr):[];if(g.some(x=>x.k==='main')&&g.some(x=>x.k==='in'))openTr(t.tr);else openForm(t)}
  else if(a==='pay')openForm({type:'in',cat:'c_paid',who:d.n,amt:+d.v});
  else if(a==='deltx'){if(await yes('Hapus transaksi ini?')){D.tx=D.tx.filter(t=>t.id!==F.id);save();close();render()}}
  else if(a==='addbook'){const n=await ask('Nama buku baru ('+G[d.g]+')');if(n?.trim()){D.books.push({id:uid(),name:n.trim(),g:d.g});save();render()}}
@@ -141,7 +177,7 @@ document.addEventListener('click',async e=>{const g=e.target.closest('[data-t],[
  else if(a==='pst'){const v=await ask('Tempel data cadangan');if(v)restore(v)}});
 document.addEventListener('change',e=>{if(e.target.id!=='fi')return;const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>restore(r.result);r.readAsText(f);e.target.value=''});
 document.addEventListener('input',e=>{const el=e.target;
- if(el.id==='fa'){const n=el.value.replace(/\D/g,'');el.value=n?(+n).toLocaleString('id-ID'):''}
+ if(el.id==='fa'||el.id==='fe'){const n=el.value.replace(/\D/g,'');el.value=n?(+n).toLocaleString('id-ID'):'';if(mode==='tr')updTs()}
  else if(el.id==='fw'&&!$('#fa').value&&ct(F.cat)?.s===2){const o=debts().find(o=>o.n.toLowerCase()===el.value.trim().toLowerCase());if(o)$('#fa').value=o.a.toLocaleString('id-ID')}});
 render();
 </script></body></html>
